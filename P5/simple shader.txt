@@ -1,0 +1,40 @@
+SIMPLE SHADER:
+
+http://shdr.bkcore.com/#1/lVHLboMwEPwVyydSUdqqnBL11MetVU+9lCpywSGOYBfZJg1E+fcuNoS8eqgQAu/MemdmtzzDtC4lWMOnn7zSMlVGIbClypcVWxQo7CyBtdCNgpytZXrPFm+oS1Gcld/RKEu9BCSQIhjrgRQL1OzBHYK7kJ6Jo6xRZawUCoJJAtsEmKcDUccRfVE2ksrgqqqVwfV+2sSRnFAGT2ifHTNDG0DYtXm8e/Ni/qJF/jjKiQOv7WroDJnTtuPhn1EIa7X6rq30wqrR9AkCg4Ua1IL+yaodqq+CqJtjLGYlZrL4UPLnMlxpXMm0G7bH/7+Xi6HHnQ2K5EQA5eJCGjxSOtFtn7efdbSTQ2tdpO7Y0wcN1EC3RZumnfUrOURODNIlRHb7+Aq5E8en/mtuTN0KADnvthOtDN/9Ag==
+
+http://goo.gl/noEct6
+
+/////VERTEX SHADER://///
+precision highp float;
+attribute vec3 position;
+attribute vec3 normal;
+uniform mat3 normalMatrix;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+varying vec3 fNormal;
+varying vec3 fPosition;
+
+void main()
+{
+  vec4 pos = modelViewMatrix * vec4(position, 1.0);
+  fNormal = normalize(normalMatrix * normal);
+  fPosition = pos.xyz;
+  gl_Position = projectionMatrix * pos;
+}
+
+/////FRAG SHADER://///
+precision highp float;
+varying vec3 fNormal;
+varying vec3 fPosition;
+
+const vec3 lightpos = vec3(0,0.3,0.7);
+const vec3 color = vec3(1,1,1);
+
+void main()
+{
+  vec3 n = fNormal;
+  vec3 normLightpos = normalize(lightpos);
+  float nDotLight = dot(n, normLightpos);
+  
+  gl_FragColor = vec4(color * nDotLight, 1);
+}

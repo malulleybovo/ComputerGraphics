@@ -1,0 +1,114 @@
+FANCY SHADER:
+
+http://shdr.bkcore.com/#1/rVZ7b9s2EP8qB/8l2a5jx0k3pMiAoPbqoE48IEVRYNkK2aJsdpIokPRDKfLdd3xJlGxv2NAgoqzjvX73Ir93YrbaZiSXonPze+fiB/098+fcrQCT6dP9h8fpBD4tYL5YfIQPi8UEFo/waTaF2fQLPHy8v4eHxWQ69wV/nCvqKThZUUFZDhu63hSQpCyS79TONqcJ45mhgKQZaZB3ZHUJnAiWbiWK671dxEuar9XeGJLfmKBnth5RQ5Q2NrJIXkHGYpJ+pmT/YJ1Qz4rlQirBK0jRR1kwkcOtJgTDPlziM8ZnFL4DDKtmgcLaPiX/nqWMOwUjJekeX8NKcTkXkCo2UUw4bAURIDdUgIrCNo1u7H5C8yg1Uqj7DnowxWcOXQhggms+YXKOlODJfszCP8WG5hA2quIOhaNsSbH0LGWKFJJRISwcJM2R1PISqUopbsS4LoncE5JDruMMUR5bfh6VlvsJWUVBVgjBVzA7r2ETpQn+WKcEArdNStLUHlbhoipJ6kVzIoROtUqBBVclcHDdh6H+t+HPMM5AJaB8hAUW++HQGmKaJJgGzbzaoEOYkSVJ2R4kgxUnkSRQRFISnlcyDulpoTXdEWBbCeQgeQQkSciqtueCX7us/K2WltuCqTVmqD/HOKKwNNFR+kwvVUFBjaPrwbAhvyO81BylK74dozFu0zxQv3SAv6sFlNia5IQrxA5hXRIADeiqsJYiGA+GWIACtY3Q/a7q6zBEiukGhKNgXWtYRsmxKZsAW+yBjXVoGA3Ew3vVdJHO83DwFvUr26aY6AsJquEQDsoQ3iDPaGzt0SSopX9RMbaaLWjtS4HhkGr8SGAJLFlcuk3n3C14aiw8A+5ntbxFhKjZgXw1L5IKcs6YkJwW5NiMrQml9NIuo5ba4xB600KnWepUaaomVsPvWVbja6y6DQebsTkOTNcMjS2r4WtWGg5/kjr4VdArD7XUGJyQkR4cyhe4cB97nxEdiClXnVCn0jr1xmgJPc9rOPVQwwno+slXPEdR/1t3zITi4SRbnGoK3akh5BmaG/er08EiqL8diKbaBoz5MQhZ2WpwtpT0XFQa0HUXmJmvB2pgz7x+C1ojeykGiXA9xG15df0jq4tT4BBopXr2nDY4axusUDRsFRuGp259BrRNFWwfOHMzY65fT66zafY+ehWenrHmyazTr7/yaO2OYm8wVPLGxGun3zl/R8HJw+lyiw2la6Pwbxytvby+crgrDF45HB27hNNDe7d5ITnJUHD2zWTyBEfr6vSvd6B/uDedvx7Vx4N/NFj1jdj6UNUlRH/6Y96VhpsxV4GhPksX2YESDNQsHw7G3fYp0sMy+SnsHwmV/0fo5T8IjVwzOBxVEBGIHWm2+BuD8fZkgt3APp6kJnBuVjljWMy+uVZFeAKvnT/6Ha2vc2Pe4mJDDtlflA6+ic7r3w==
+
+http://goo.gl/PbjJ72
+
+/////VERTEX SHADER://///
+precision highp float;
+attribute vec3 position;
+attribute vec3 normal;
+uniform mat3 normalMatrix;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+uniform float time;
+varying vec3 fNormal;
+varying vec3 fPosition;
+varying mat4 modelViewMat;
+
+void main()
+{
+  fNormal = normalize(normalMatrix * normal);
+  
+	vec4 pos = vec4(
+		position.x * (abs(0.3*sin(10.0*time)) + 0.7),
+		position.y * (abs(0.3*sin(10.0*time)) + 0.7),
+		position.z * (abs(0.3*sin(10.0*time)) + 0.7),
+		1.0);
+  
+	fPosition = pos.xyz;
+	modelViewMat = modelViewMatrix;
+  
+  pos = modelViewMatrix * pos;
+  
+	gl_Position = projectionMatrix * pos;
+}
+
+/////FRAG SHADER://///
+////////////////////////////////////////////////////////////////////////
+//
+//  DESIGNED TO LOOK GOOD ON THE HEX MKII MODEL
+//
+////////////////////////////////////////////////////////////////////////
+
+precision highp float;
+uniform float time;
+uniform vec2 resolution;
+varying vec3 fPosition;
+varying vec3 fNormal;
+varying mat4 modelViewMat;
+
+const vec4 lightposn = vec4(0, 20, 30, 1); // light position
+const vec4 lightColor = vec4(10, 10, 10, 1); // light color
+
+// shader uses this formula:
+// final color = A + E + L * ( D * nDotL + (S * nDotH)^shin )
+//
+// A = ambient
+// E = emission
+// L = light color
+// nDot = dot between normal and light ray
+// S = specular
+// nDotH = dot between normal and half angle (between eye and light ray)
+// shin = shininess
+vec4 ambient = vec4(0.5, 0, 0, 1); // made it in a red ambient
+vec4 diffuse; // changes below to create pattern
+vec4 specular; // changes below to give out extra effect
+vec4 emission = vec4(0.0, 0.0, 0.0, 1); // made it so it does not emit light
+float shininess = 15.0; // made it very shiny
+
+void main(void)
+{
+  // generate specular color
+  vec4 specular = abs(3.0 * sin(10.0*time)) * vec4(1, 1, 0.5, 1);
+  
+  // generate diffuse color (pattern)
+  float xConstant = 0.6 * abs(normalize(fPosition).y) - 0.13;
+  if(xConstant > 0.0)
+  {
+    // paint rest of body
+    diffuse = (xConstant * vec4( 1, 0.8, 0.6, 1.0));
+  }
+  else
+  {
+    // paint stripe
+    diffuse = vec4(0., 0.2, 0.2, 1);
+  }
+  
+  // generate final color
+	vec4 finalcolor;
+
+	const vec3 eyepos = vec3(0, 0, 0);
+	vec4 _mypos = modelViewMat * vec4(fPosition, 1);
+	vec3 mypos = _mypos.xyz / _mypos.w;
+	vec3 eyedirn = normalize(eyepos - mypos);
+
+	finalcolor = ambient + emission;
+	vec3 Lpos;
+	vec3 lightDirection;
+	vec3 halfAngle;
+
+	Lpos = lightposn.xyz / lightposn.w;
+	lightDirection = normalize(Lpos - mypos);
+	halfAngle = normalize(lightDirection + eyedirn);
+
+	float nDotL = dot(fNormal, lightDirection);
+	vec4 lambert = diffuse * lightColor * max(nDotL, 0.0);
+
+	float nDotH = dot(fNormal, halfAngle);
+	vec4 phong = specular * lightColor * pow(max(nDotH, 0.0), shininess);
+
+	finalcolor = finalcolor + lambert + phong;
+
+	gl_FragColor = normalize(finalcolor);
+}

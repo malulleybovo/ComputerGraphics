@@ -1,0 +1,111 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta name="description" content="One Triangle">
+    <meta charset="utf-8">
+    <title>JS Bin</title>
+</head>
+<body onload="start()">
+    <canvas id="mycanvas" width="1600" height="800"></canvas>
+
+    <script src="http://graphics.cs.wisc.edu/JS/twgl-full.min.js"></script>
+    <script src="MatrixStack.js"></script>
+    <script src="ModelLoader.js"></script>
+    <script src="Model.js"></script>
+    <script src="p6source.js"></script>
+
+    <script id="vs">
+        attribute vec3 vPosition;
+        attribute vec2 vTexture;
+        attribute vec3 vNormal;
+        varying vec2 fTexture;
+        uniform mat4 uMVP;
+        uniform mat4 normalMatrix;
+        uniform mat4 modelViewMatrix;
+        uniform float time;
+        varying vec3 fNormal;
+        varying vec3 fPosition;
+        varying mat4 fModelView;
+
+        void main(void)
+        {
+
+            fNormal = normalize(mat3(normalMatrix) * vNormal);
+
+            vec4 pos = vec4(vPosition, 1.0);
+
+            fPosition = (modelViewMatrix * pos).xyz;
+
+            fModelView = modelViewMatrix;
+            fTexture = vTexture;
+            gl_Position = uMVP * pos;
+        }
+    </script>
+    <script id="fs">
+        precision highp float;
+        uniform float time;
+        uniform sampler2D uSampler;
+        uniform vec4 ambient;// = vec4(0.1, 0.1, 0.1, 1); // made it in a red ambient
+        uniform vec4 diffuse; // changes below to create pattern
+        uniform vec4 specular; // changes below to give out extra effect
+        uniform vec4 emission;// = vec4(0.0, 0.0, 0.0, 1); // made it so it does not emit light
+        uniform float shininess;// = 15.0; // made it very shiny
+        varying vec2 fTexture;
+        varying vec3 fNormal;
+        varying vec3 fPosition;
+        varying mat4 fModelView;
+
+        vec4 lightposn = vec4(0, 1, 0, 1); // light position
+        const vec4 lightColor = vec4(10, 10, 10, 1); // light color
+
+        
+
+        void main(void) {
+            // generate specular color
+            vec4 _specular = abs(3.0 * sin(10.0*time)) * specular; // vec4(1, 1, 0.5, 1);
+
+            lightposn = lightposn;
+
+            // generate diffuse color (pattern)
+            vec4 fragTexture = texture2D(uSampler, vec2(fTexture.s, fTexture.t));
+            
+  
+            // generate final color
+            vec4 finalcolor;
+
+            const vec3 eyepos = vec3(0, 0, 0);
+            vec4 _mypos = vec4(fPosition, 1);
+            vec3 mypos = _mypos.xyz / _mypos.w;
+            vec3 eyedirn = normalize(eyepos - mypos);
+
+            finalcolor = ambient + emission;
+            vec3 Lpos;
+            vec3 lightDirection;
+            vec3 halfAngle;
+
+            Lpos = lightposn.xyz / lightposn.w;
+            lightDirection = normalize(Lpos - mypos);
+            halfAngle = normalize(lightDirection + eyedirn);
+
+            float nDotL = dot(fNormal, lightDirection);
+            vec4 lambert = diffuse * lightColor * fragTexture * max(nDotL, 0.0);
+
+            float nDotH = dot(fNormal, halfAngle);
+            vec4 phong = _specular * lightColor * pow(max(nDotH, 0.0), shininess);
+
+            finalcolor = finalcolor + lambert + phong;
+
+            gl_FragColor = normalize(finalcolor);
+        }
+    </script>
+    <script id="crystalTextureImg" src="textures.imgjs"></script>
+    <script src="legoBodyDataFile.js"></script>
+    <script src="legoRightHandDataFile.js"></script>
+    <script src="legoLeftHandDataFile.js"></script>
+    <script src="legoRightLegDataFile.js"></script>
+    <script src="legoLeftLegDataFile.js"></script>
+    <script src="legoHouseDataFile.js"></script>
+    <script src="crystalDataFile.js"></script>
+    <script src="groundDataFile.js"></script>
+</body>
+</html>
