@@ -1,0 +1,247 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<!-- Graphics town framework code by Mike Gleicher
+  -- written October, 2015
+  -->
+<head>
+    <meta charset="UTF-8">
+    <title>GraphicsTown JS 2015!</title>
+</head>
+<body>
+<!-- load this stuff first -->
+<script src="Libraries/twgl-full.js"></script>
+<script src="Libraries/panel.js"></script>
+<script src="Libraries/arcball.js"></script>
+<script src="grobject.js"></script>
+<script src="ExampleObjects/ground.js"></script>
+
+<!-- This is where we load the objects for the world -->
+<script src="ExampleObjects/simplest.js"></script>
+<script src="ExampleObjects/texturedplane.js"></script>
+<script src="ExampleObjects/cube.js"></script>
+<script src="ExampleObjects/Renderer.js"></script>
+<script src="Texture.js"></script>
+<script src="ModelLoader.js"></script>
+<script src="ModelTexLoader.js"></script>
+<script src="Model.js"></script>
+<script src="legoHeadDataFile.js"></script>
+<script src="crystalDataFile.js"></script>
+<script src="Entities/Ground/groundTextures.js"></script>
+<script src="Entities/Ground/groundDataFile.js"></script>
+<script src="Entities/xWing/xWingTextures.js"></script>
+<script src="Entities/xWing/xWingDataFile.js"></script>
+<script src="Entities/arc170/arc170DataFile.js"></script>
+<script src="Entities/arc170/arc170Textures.js"></script>
+
+<!-- I am adding the helicopter -->
+<script src="Helicopter/helicopter.js"></script>
+
+<!-- This gets loaded LAST (actually, it probably doesn't have to) -->
+<script src="graphicstown.js"></script>
+</body>
+
+<!-- all of the shaders get stuck here in the HTML because
+  -- that's the only way I know to load them without either
+  -- sticking them in JavaScript strings, or using a web server
+  -->
+
+<script id="general-vs" type="notjs">
+
+    attribute vec3 vPosition;
+    attribute vec2 vTexCoord;
+    attribute vec3 vTang;
+    attribute vec3 vNormal;
+
+    //uniform float time;
+    uniform mat4 modelMatrix;
+    uniform mat4 viewMatrix;
+    uniform mat4 projMatrix;
+    uniform mat4 normalMatrix;
+    uniform vec3 dirlight;
+
+    varying vec3 fPosition;
+    varying vec3 fNormal;
+    varying vec2 fTexCoord;
+    varying vec3 fTang;
+    varying mat3 tangMatrix;
+    varying vec3 toCameraVector;
+
+    void main(void)
+    {
+
+    vec4 pos = vec4(vPosition, 1.0);
+    fPosition = (viewMatrix * modelMatrix * pos).xyz;
+
+    fNormal = normalize(mat3(normalMatrix) * vNormal);
+    vec3 tang = normalize((viewMatrix * modelMatrix * vec4(vTang, 1.0)).xyz);
+    vec3 bitang = normalize(cross(fNormal, tang));
+
+    tangMatrix = mat3(
+    tang.x, bitang.x, fNormal.x,
+    tang.y, bitang.y, fNormal.y,
+    tang.z, bitang.z, fNormal.z
+    );
+
+    fTang = vTang;
+
+    fTexCoord = vTexCoord;
+    toCameraVector = tangMatrix * (-fPosition);
+
+    gl_Position = projMatrix * viewMatrix * modelMatrix * pos;
+
+    }
+
+</script>
+
+<script id="general-fs" type="notjs">
+
+    precision highp float;
+    //uniform float time;
+
+    uniform sampler2D diffuseMap;
+    uniform sampler2D normalMap;
+
+    uniform vec4 ambient;// = vec4(0.1, 0.1, 0.1, 1); // made it in a red ambient
+    uniform vec4 diffuse; // changes below to create pattern
+    uniform vec4 specular; // changes below to give out extra effect
+    uniform vec4 emission;// = vec4(0.0, 0.0, 0.0, 1); // made it so it does not emit light
+    uniform float shininess;// = 15.0; // made it very shiny
+
+    uniform mat4 modelMatrix;
+    uniform mat4 viewMatrix;
+
+    uniform vec3 dirlight; // directional light
+    uniform vec4 ptlightposn[10]; // point lights
+    uniform vec4 ptlightcolorn[10];
+    uniform float ptlightdampern[10];
+
+    varying vec3 fPosition;
+    varying vec3 fNormal;
+    varying vec2 fTexCoord;
+    varying vec3 fTang;
+    varying mat3 tangMatrix;
+    varying vec3 toCameraVector;
+
+    vec4 lightposn = vec4(0, -10, 0, 1);
+    const vec4 lightColor = vec4(5., 5., 5., 1.); // light color
+
+    void main(void) {
+    // generate specular color
+    //vec4 _specular = abs(3.0 * sin(10.0*time)) * specular; // vec4(1, 1, 0.5, 1);
+
+
+    // generate diffuse color (pattern)
+    vec4 diffuseTexture = 1.5 * texture2D(diffuseMap, fTexCoord) -0.5;
+    vec4 normalTexture = 2.0 * texture2D(normalMap, fTexCoord) - 1.0;
+    vec3 unitNormal = normalize(normalTexture.rgb);
+    vec3 unitVectorToCamera = normalize(toCameraVector);
+
+    // generate final color
+    vec4 finalcolor;
+
+    const vec3 eyepos = vec3(0, 0, 0);
+    vec4 _mypos = vec4(fPosition, 1);
+    vec3 mypos = _mypos.xyz / _mypos.w;
+    vec3 eyedirn = normalize(eyepos - mypos);
+
+    finalcolor = vec4(0.1,0.1,0.1,1.) * (ambient + emission);
+    vec3 halfAngle;
+    vec3 Lpos;
+    vec3 lightDirection;
+
+    // Point light computation
+    for(int i = 0; i < 2; i++) {
+    vec4 pt = (viewMatrix * ptlightposn[i]);
+    Lpos = pt.xyz / pt.w;
+    vec3 lightDist = Lpos - fPosition;
+    lightDirection = normalize(Lpos - mypos);
+    halfAngle = normalize(lightDirection + unitVectorToCamera);
+    float attenuation = 50.0 * pow(1.0 / length(lightDist), ptlightdampern[i]);
+
+    float nDotL = dot(fNormal, lightDirection);
+    vec4 lambert = attenuation * diffuse * ptlightcolorn[i] * diffuseTexture * max(nDotL, 0.0);
+
+    float nDotH = dot(unitNormal, halfAngle);
+    vec4 phong = attenuation * specular * ptlightcolorn[i] * pow(max(nDotH, 0.0), shininess);
+
+    finalcolor = finalcolor + lambert;
+    }
+
+    gl_FragColor = normalize(finalcolor);
+    }
+
+</script>
+
+<script id="cube-vs" type="notjs">
+// specialized shader for the simple cube
+// we assume that the model matrix works as the normal
+//      matrix - this only is try if the model matrix
+//      it a rotate/translate
+//      (uniform scale is OK since we re-normalize)
+// color is solid
+// simple lighting
+    precision highp float;
+
+    attribute vec3 vpos;
+    attribute vec3 vnormal;
+    varying vec3 outColor;
+
+    uniform mat4 view;
+    uniform mat4 proj;
+    uniform mat4 model;
+    uniform vec3 dirlight;
+    uniform vec3 cubecolor;
+
+
+    void main(void) {
+        gl_Position = proj * view * model * vec4(vpos, 1.0);
+        vec4 normal = normalize(model * vec4(vnormal,0.0));
+        float diffuse = .5 + .5*abs(dot(normal, vec4(dirlight,0.0)));
+        outColor = cubecolor * diffuse;
+    }
+</script>
+<script id="cube-fs" type="notjs">
+// simple shader that does vertex coloring
+//  (e.g. the vertex shader figures the lighting
+// note this is used for more than just the cube
+    precision highp float;
+    varying vec3 outColor;
+    void main(void) {
+        gl_FragColor = vec4(outColor, 1.0);
+    }
+</script>
+
+<!-- Special Ground Plane Shader - makes a boring
+  -- checkerboard
+  -->
+<script id="ground-vs" type="not-js">
+    precision highp float;
+
+    attribute vec3 vpos;
+    varying vec3 outPos;
+
+    uniform mat4 view;
+    uniform mat4 proj;
+
+    void main(void) {
+        gl_Position = proj * view * vec4(vpos, 1.0);
+        outPos = vpos;
+    }
+</script>
+<script id="ground-fs" type="notjs">
+    // note this is used for more than just the cube
+    precision highp float;
+    varying vec3 outPos;
+    void main(void) {
+        float xs = step(1.0,mod(outPos.x,2.0));
+        float zs = step(1.0,mod(outPos.z,2.0));
+        float ss = (xs>.5) ? zs : 1.0-zs;
+        gl_FragColor = mix(vec4(0.5,0.5,0.5,1),
+                           vec4(0.3,0.5,0.4,1),
+                           ss
+                           );
+
+    }
+</script>
+
+</html>
