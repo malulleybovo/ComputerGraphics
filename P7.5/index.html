@@ -58,36 +58,45 @@
     uniform mat4 projMatrix;
     uniform mat4 normalMatrix;
     uniform vec3 dirlight;
-
+    uniform vec4 ptlightposn[10]; // point lights
+    
     varying vec3 fPosition;
     varying vec3 fNormal;
     varying vec2 fTexCoord;
     varying vec3 fTang;
     varying mat3 tangMatrix;
     varying vec3 toCameraVector;
+    varying vec3 ptlightpos[10];
 
     void main(void)
     {
 
-    vec4 pos = vec4(vPosition, 1.0);
-    fPosition = (viewMatrix * modelMatrix * pos).xyz;
+        vec4 pos = vec4(vPosition, 1.0);
+        fPosition = (viewMatrix * modelMatrix * pos).xyz;
 
-    fNormal = normalize(mat3(normalMatrix) * vNormal);
-    vec3 tang = normalize((viewMatrix * modelMatrix * vec4(vTang, 1.0)).xyz);
-    vec3 bitang = normalize(cross(fNormal, tang));
+        fNormal = normalize(vec3(normalMatrix * vec4(vNormal, 0.0)));
+        vec3 norm = normalize((normalMatrix * vec4(vNormal,0.0)).xyz);
+        vec3 tang = normalize((normalMatrix * vec4(vTang, 1.0)).xyz);
+        vec3 bitang = normalize(cross(fNormal, tang));
 
-    tangMatrix = mat3(
-    tang.x, bitang.x, fNormal.x,
-    tang.y, bitang.y, fNormal.y,
-    tang.z, bitang.z, fNormal.z
-    );
+        tangMatrix = mat3(
+            tang.x, bitang.x, norm.x,
+            tang.y, bitang.y, norm.y,
+            tang.z, bitang.z, norm.z
+        );
 
-    fTang = vTang;
+        fTang = vTang;
+        
+        for(int i = 0; i < 3; i++) {
+            vec4 t = viewMatrix * ptlightposn[i];
+            vec3 t2 = t.xyz / t.w;
+            ptlightpos[i] = tangMatrix * (t2 - fPosition);
+        }
 
-    fTexCoord = vTexCoord;
-    toCameraVector = tangMatrix * (-fPosition);
+        fTexCoord = vTexCoord;
+        toCameraVector = tangMatrix * (-fPosition);
 
-    gl_Position = projMatrix * viewMatrix * modelMatrix * pos;
+        gl_Position = projMatrix * viewMatrix * modelMatrix * pos;
 
     }
 
@@ -109,11 +118,11 @@
 
     uniform mat4 modelMatrix;
     uniform mat4 viewMatrix;
-
+    uniform mat4 normalMatrix;
     uniform vec3 dirlight; // directional light
-    uniform vec4 ptlightposn[10]; // point lights
     uniform vec4 ptlightcolorn[10];
     uniform float ptlightdampern[10];
+    varying vec3 ptlightpos[10];
 
     varying vec3 fPosition;
     varying vec3 fNormal;
@@ -132,7 +141,7 @@
 
     // generate diffuse color (pattern)
     vec4 diffuseTexture = 1.5 * texture2D(diffuseMap, fTexCoord) -0.5;
-    vec4 normalTexture = 2.0 * texture2D(normalMap, fTexCoord) - 1.0;
+    vec4 normalTexture = 2.0 * texture2D(normalMap, fTexCoord, -1.0) - 1.0;
     vec3 unitNormal = normalize(normalTexture.rgb);
     vec3 unitVectorToCamera = normalize(toCameraVector);
 
@@ -148,23 +157,33 @@
     vec3 halfAngle;
     vec3 Lpos;
     vec3 lightDirection;
+    
+    // Directional light computation (IN PROGRESS - dirlight to be put into eye space)
+    //vec3 dirlightInTangSpace = normalize(tangMatrix * dirlight);
+    //halfAngle = normalize(dirlight + eyedirn);
+
+    //float nDotL = dot(unitNormal, dirlightInTangSpace);
+    //vec4 lambert = 0.5 * diffuse * lightColor * diffuseTexture * max(nDotL, 0.0);
+
+    //float nDotH = dot(unitNormal, halfAngle);
+    //vec4 phong = 0.5 * specular * lightColor * pow(max(nDotH, 0.0), 10.0 * shininess);
+
+    //finalcolor = finalcolor + (0.25 * (-cos(3.14) + 1.0)) * (lambert);
 
     // Point light computation
-    for(int i = 0; i < 2; i++) {
-    vec4 pt = (viewMatrix * ptlightposn[i]);
-    Lpos = pt.xyz / pt.w;
-    vec3 lightDist = Lpos - fPosition;
-    lightDirection = normalize(Lpos - mypos);
-    halfAngle = normalize(lightDirection + unitVectorToCamera);
-    float attenuation = 50.0 * pow(1.0 / length(lightDist), ptlightdampern[i]);
+    for(int i = 0; i < 3; i++) {
+        float lightDist = length(ptlightpos[i]);
+        lightDirection = normalize(ptlightpos[i]);
+        halfAngle = normalize(lightDirection + unitVectorToCamera);
+        float attenuation = 50.0 / pow(lightDist, ptlightdampern[i]);
 
-    float nDotL = dot(fNormal, lightDirection);
-    vec4 lambert = attenuation * diffuse * ptlightcolorn[i] * diffuseTexture * max(nDotL, 0.0);
+        float nDotL = dot(unitNormal, lightDirection);
+        vec4 lambert = attenuation * diffuse * ptlightcolorn[i] * diffuseTexture * max(nDotL, 0.0);
 
-    float nDotH = dot(unitNormal, halfAngle);
-    vec4 phong = attenuation * specular * ptlightcolorn[i] * pow(max(nDotH, 0.0), shininess);
+        float nDotH = dot(unitNormal, halfAngle);
+        vec4 phong = attenuation * specular * ptlightcolorn[i] * pow(max(nDotH, 0.0), shininess);
 
-    finalcolor = finalcolor + lambert;
+        finalcolor = finalcolor + lambert + phong;
     }
 
     gl_FragColor = normalize(finalcolor);
