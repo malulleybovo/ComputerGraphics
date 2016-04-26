@@ -51,6 +51,8 @@ window.onload = function() {
 
     // a switch between camera modes
     var uiMode = document.createElement("select");
+    uiMode.innerHTML += "<option>Spaceship Player</option>";
+    uiMode.innerHTML += "<option>Player</option>";
     uiMode.innerHTML += "<option>ArcBall</option>";
     uiMode.innerHTML += "<option>Drive</option>";
     uiMode.innerHTML += "<option>Fly</option>";
@@ -83,7 +85,8 @@ window.onload = function() {
 
     // make a fake drawing state for the object initialization
     var drawingState = {
-        gl : gl,
+        gl: gl,
+        shaderProgram: initShader(gl),
         proj : twgl.m4.identity(),
         view : twgl.m4.identity(),
         camera : twgl.m4.identity(),
@@ -106,6 +109,40 @@ window.onload = function() {
     var drivePos = [0,.2,5];
     var driveTheta = 0;
     var driveXTheta = 0;
+
+    // parameters for player mode
+    var playerXaxis = [0, 0, -1];
+    var playerYaxis = [1, 0, 0];
+    var characterRot = 0; 
+    var characterSpd = 1;
+    var isMovingForward = false;
+    var timeMoving = 0;
+
+    var theta = 0; // viewing angle on XY-plane from X- to Y-axis
+    var phi = 80; // viewing angle down from Z-axis
+    var zoom = 20;
+    var tilt = 0; // tilt angle for the camera
+
+    var eye;
+    var target = [0, 0, 0]; // position multiplier for camera
+    var up = [0, 1, 0];
+
+    // parameters for spaceship player mode
+    var spaceshipXaxis = [0, 0, -1];
+    var spaceshipYaxis = [-1, 0, 0];
+    var spaceshipTiltX = 0;
+    var spaceshipTiltY = 0;
+    var spaceshipRot = 0;
+    var spaceshipSpd = 1;
+
+    var theta2 = 0; // viewing angle on XY-plane from X- to Y-axis
+    var phi2 = 80; // viewing angle down from Z-axis
+    var zoom2 = 20;
+    var tilt2 = 0; // tilt angle for the camera
+
+    var eye2;
+    var target2 = [0, 0, 0]; // position multiplier for camera
+    var up2 = [0, 1, 0];
 
     // cheesy keyboard handling
     var keysdown = {};
@@ -131,53 +168,60 @@ window.onload = function() {
     //    0.1, [2, 0, 0],
     //    "crystal");
     //grobjects.push(temp);
-    temp = new Model(drawingState.gl,
+    temp = new Model(drawingState,
         groundData,
         groundTexData,
         0.5, [0, -1, 0],
         [0, 0, 1], 0,
         "ground");
     grobjects.push(temp);
-    temp = new Model(drawingState.gl,
+    temp = new Model(drawingState,
         xWingBodyData,
         xWingBodyTexData,
         10, [0, 0, 0],
         [0, 0, 1], 0,
         "x wing body");
     grobjects.push(temp);
-    temp = new Model(drawingState.gl,
+    temp = new Model(drawingState,
         xWingWindowData,
         xWingWindowTexData,
         10, [0, 0, 0],
         [0, 0, 1], 0,
         "x wing window");
     grobjects.push(temp);
-    temp = new Model(drawingState.gl,
+    temp = new Model(drawingState,
         xWingR2D2Data,
         xWingR2D2TexData,
         10, [0, 0, 0],
         [0, 0, 1], 0,
         "x wing r2d2");
     grobjects.push(temp);
-    temp = new Model(drawingState.gl,
+    temp = new Model(drawingState,
         xWingWingSet1Data,
         xWingWingSet1TexData,
         10, [0, 0, 0],
         [0, 0, 1], -0.3,
         "x wing wing set 1");
     grobjects.push(temp);
-    temp = new Model(drawingState.gl,
+    temp = new Model(drawingState,
         xWingWingSet2Data,
         xWingWingSet2TexData,
         10, [0, 0, 0],
         [0, 0, 1], 0.3,
         "x wing wing set 2");
     grobjects.push(temp);
-    temp = new Model(drawingState.gl,
+    temp = new Model(drawingState,
+        snowTerrainData,
+        snowTerrainTexData,
+        10, [0, -4, 0],
+        [0, 1, 0], 0,
+        "snow terrain");
+    grobjects.push(temp);
+    temp = new Model(drawingState,
         arc170BodyData,
         arc170BodyTexData,
-        0.5, [-6, 0, 0],
-        [0, 1, 0], 0,
+        0.5, [0, 0, 0],
+        [0, 1, 0], toRad(180),
         "arc 170 body");
     grobjects.push(temp);
     // TEMPORARY CODE BLOCK END
@@ -189,10 +233,10 @@ window.onload = function() {
     });
     controls.appendChild(toExamine);
 
+    //
+    initCubeMap(canvas, drawingState.view);
     // the actual draw function - which is the main "loop"
     function draw() {
-        grobjects[grobjects.length - 1].setModelMatrixL(twgl.m4.axisRotation([0, 1, 0], rot));
-
         // advance the clock appropriately (unless its stopped)
         var curTime = Date.now();
         if (checkboxes.Run.checked) {
@@ -201,7 +245,7 @@ window.onload = function() {
         lastTime = curTime;
 
         canvas.width = window.innerWidth - 20;
-        canvas.height = window.innerHeight - 70;
+        canvas.height = window.innerHeight - 100;
         gl.viewport(0, 0, canvas.width, canvas.height);
 
         // first, let's clear the screen
@@ -210,9 +254,10 @@ window.onload = function() {
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
         // figure out the transforms
-        var projM = twgl.m4.perspective(fov, window.innerWidth / window.innerHeight, 0.1, 100);
+        var projM = twgl.m4.perspective(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
         var cameraM = twgl.m4.lookAt(lookFrom,lookAt,[0,1,0]);
         var viewM = twgl.m4.inverse(cameraM);
+
 
         // implement the camera UI
         if (uiMode.value == "ArcBall") {
@@ -262,21 +307,47 @@ window.onload = function() {
             var dy = Math.sin(driveXTheta);
 
             if (keysdown[87]) {
-                drivePos[0] -= .05*dx;
-                drivePos[2] -= .05*dz;
-                drivePos[1] += .05 * dy;
+                drivePos[0] -= .1*dx;
+                drivePos[2] -= .1*dz;
+                drivePos[1] += .1 * dy;
             }
 
             if (keysdown[83]) {
-                drivePos[0] += .05*dx;
-                drivePos[2] += .05*dz;
-                drivePos[1] -= .05 * dy;
+                drivePos[0] += .1*dx;
+                drivePos[2] += .1*dz;
+                drivePos[1] -= .1 * dy;
             }
 
             cameraM = twgl.m4.rotationX(driveXTheta);
             twgl.m4.multiply(cameraM, twgl.m4.rotationY(driveTheta), cameraM);
             twgl.m4.setTranslation(cameraM, drivePos, cameraM);
             viewM = twgl.m4.inverse(cameraM);
+        } else if (uiMode.value == "Player") {
+            inputControl();
+
+            eye = [
+                zoom * Math.sin(toRad(theta)) * Math.sin(toRad(phi)),
+                zoom * Math.cos(toRad(phi)),
+                zoom * Math.cos(toRad(theta)) * Math.sin(toRad(phi))];
+            var tCamera = m4.inverse(m4.lookAt(eye, [0, 0, 0], up)); // get camera position
+            tCamera = m4.multiply(m4.axisRotation(eye, toRad(tilt)), tCamera); // apply current tilt
+            viewM = m4.multiply(m4.translation(twgl.v3.mulScalar(target, -1)), tCamera); // place camera in the right position
+        } else if (uiMode.value == "Spaceship Player") {
+            spaceshipInputControl();
+
+            grobjects[grobjects.length - 1].setTranslation(twgl.m4.translation([target2[0], target2[1], target2[2]]));
+            grobjects[grobjects.length - 1].setRotation(twgl.m4.axisRotation(spaceshipXaxis, toRad(spaceshipTiltX)));
+            grobjects[grobjects.length - 1].addRotation(twgl.m4.axisRotation(spaceshipYaxis, toRad(spaceshipTiltY)));
+            grobjects[grobjects.length - 1].addRotation(twgl.m4.axisRotation([0, 1, 0], toRad(180 + theta2)));
+            grobjects[grobjects.length - 1].addRotation(twgl.m4.axisRotation([-1, 0, 0], toRad(phi2 - 72.5)));
+
+            eye2 = [
+                zoom2 * Math.sin(toRad(theta2)) * Math.sin(toRad(phi2)),
+                zoom2 * Math.cos(toRad(phi2)),
+                zoom2 * Math.cos(toRad(theta2)) * Math.sin(toRad(phi2))];
+            var tCamera = m4.inverse(m4.lookAt(eye2, [0, 0, 0], up2)); // get camera position
+            tCamera = m4.multiply(m4.axisRotation(eye2, toRad(tilt2)), tCamera); // apply current tilt
+            viewM = m4.multiply(m4.translation(twgl.v3.mulScalar(target2, -1)), tCamera); // place camera in the right position
         }
 
         // get lighting information
@@ -307,6 +378,7 @@ window.onload = function() {
             }
         });
 
+
         // now draw all of the objects - unless we're in examine mode
         if (checkboxes.Examine.checked) {
             // get the examined object - too bad this is an array not an object
@@ -328,7 +400,345 @@ window.onload = function() {
                 if(obj.drawAfter) obj.drawAfter();
             });
         }
+
+        drawCubeMap(drawingState, tod);
         window.requestAnimationFrame(draw);
     };
     draw();
+
+    function inputControl() {
+        /* CAMERA CONTROLS */
+        if (keysdown[39]) {
+            // right arrow >> spin camera right
+            theta = (theta - 5) % 360;
+            playerXaxis =
+                twgl.v3.normalize(
+                twgl.m4.transformDirection(
+                twgl.m4.axisRotation([0, 1, 0], toRad(-5)),
+                playerXaxis));
+        }
+
+        if (keysdown[37]) {
+            // left arrow >> spin camera left
+            theta = (theta + 5) % 360;
+            playerXaxis =
+                twgl.v3.normalize(
+                twgl.m4.transformDirection(
+                twgl.m4.axisRotation([0, 1, 0], toRad(5)),
+                playerXaxis));
+        }
+
+        if (keysdown[40]) {
+            // down arrow >> spin camera up
+            if (phi < 90) {
+                phi = (phi + 5);
+            }
+        }
+
+        if (keysdown[38]) {
+            // up arrow >> spin camera down
+            if (phi > 5) {
+                phi = (phi - 5);
+            }
+        }
+
+        if (keysdown[84]) {
+            // T key >> tilt camera counter clockwise
+            if (!keysdown[16]) {
+                tilt += 5;
+            }
+                // Shift + T >> tilt camera clockwise
+            else {
+                tilt -= 5;
+            }
+        }
+
+        if (keysdown[70]) {
+            // F key >> -FOV
+            if (!keysdown[16]) {
+                if (zoom > 5) {
+                    zoom -= 1;
+                }
+            }
+                // Shift + F key >> +FOV
+            else {
+                if (zoom < 30) {
+                    zoom += 1;
+                }
+            }
+        }
+
+        /* PLAYER'S CHARACTER CONTROLS */
+        if (keysdown[87]) {
+            // W key >> move character forward
+            if (!keysdown[83]) {
+                target = [
+                    target[0] + characterSpd * playerXaxis[0],
+                    target[1],
+                    target[2] + characterSpd * playerXaxis[2]
+                ];
+                if (keysdown[65]) characterRot = 45 + theta;
+                else if (keysdown[68]) characterRot = -45 + theta;
+                else characterRot = theta;
+                isMovingForward = true;
+            }
+            else isMovingForward = false;
+        }
+
+        if (keysdown[83]) {
+            // S key >> move character backward
+            if (!keysdown[87]) {
+                target = [
+                    target[0] - characterSpd * playerXaxis[0],
+                    target[1],
+                    target[2] - characterSpd * playerXaxis[2]
+                ];
+                if (keysdown[65]) characterRot = 135 + theta;
+                else if (keysdown[68]) characterRot = -135 + theta;
+                else characterRot = 180 + theta;
+                isMovingForward = true;
+            }
+            else isMovingForward = false;
+        }
+
+        if (keysdown[65]) {
+            // A key >> turn character right
+            if (!keysdown[68]) {
+                var direction = twgl.v3.cross(up, playerXaxis);
+                target = [
+                    target[0] + characterSpd * direction[0],
+                    target[1],
+                    target[2] + characterSpd * direction[2]
+                ];
+                if (keysdown[87]) characterRot = 45 + theta;
+                else if (keysdown[83]) characterRot = 135 + theta;
+                else characterRot = 90 + theta;
+                isMovingForward = true;
+            }
+            else isMovingForward = false;
+        }
+
+        if (keysdown[68]) {
+            // D key >> turn character left
+            if (!keysdown[65]) {
+                var direction = twgl.v3.cross(up, playerXaxis);
+                target = [
+                    target[0] - characterSpd * direction[0],
+                    target[1],
+                    target[2] - characterSpd * direction[2]
+                ];
+                if (keysdown[87]) characterRot = -45 + theta;
+                else if (keysdown[83]) characterRot = -135 + theta;
+                else characterRot = -90 + theta;
+                isMovingForward = true;
+            }
+            else isMovingForward = false;
+        }
+    }
+
+
+    function spaceshipInputControl() {
+        /* CAMERA CONTROLS */
+        if (keysdown[39]) {
+            // right arrow >> spin camera right
+            theta2 = (theta2 - 1.5) % 360;
+            spaceshipXaxis =
+                twgl.v3.normalize(
+                twgl.m4.transformDirection(
+                twgl.m4.axisRotation([0, 1, 0], toRad(-1.5)),
+                spaceshipXaxis));
+            spaceshipYaxis =
+                twgl.v3.normalize(
+                twgl.m4.transformDirection(
+                twgl.m4.axisRotation([0, 1, 0], toRad(-1.5)),
+                spaceshipYaxis));
+
+            if (spaceshipTiltX < 20) {
+                spaceshipTiltX += (Math.cos(toRad((spaceshipTiltX) * 90 / 20)) + 1) / 2;
+            }
+        }
+        else {
+            if (spaceshipTiltX > 0.001) {
+                spaceshipTiltX -= (Math.cos(toRad((spaceshipTiltX) * 90 / 20)) + 1) / 2;
+            }
+        }
+
+        if (keysdown[37]) {
+            // left arrow >> spin camera left
+            theta2 = (theta2 + 1.5) % 360;
+            spaceshipXaxis =
+                twgl.v3.normalize(
+                twgl.m4.transformDirection(
+                twgl.m4.axisRotation([0, 1, 0], toRad(1.5)),
+                spaceshipXaxis));
+            spaceshipYaxis =
+                twgl.v3.normalize(
+                twgl.m4.transformDirection(
+                twgl.m4.axisRotation([0, 1, 0], toRad(1.5)),
+                spaceshipYaxis));
+
+            if (spaceshipTiltX > -20) {
+                spaceshipTiltX -= (Math.cos(toRad((spaceshipTiltX) * 90 / 20)) + 1) / 2;
+            }
+        }
+        else {
+            if (spaceshipTiltX < -0.001) {
+                spaceshipTiltX += (Math.cos(toRad((spaceshipTiltX) * 90 / 20)) + 1) / 2;
+            }
+        }
+
+        if (keysdown[40]) {
+            // down arrow >> orient camera down
+            if (phi2 > 45) {
+                phi2 = (phi2 - 1.5);
+                spaceshipXaxis =
+                    twgl.v3.normalize(
+                    twgl.m4.transformDirection(
+                    twgl.m4.axisRotation(spaceshipYaxis, toRad(1.5)),
+                    spaceshipXaxis));
+            }
+
+            if (spaceshipTiltY < 20) {
+                spaceshipTiltY += (Math.cos(toRad((spaceshipTiltY) * 90 / 20)) + 1) / 2;
+            }
+        }
+        else {
+            if (spaceshipTiltY > 0.001) {
+                spaceshipTiltY -= (Math.cos(toRad((spaceshipTiltY) * 90 / 20)) + 1) / 2;
+            }
+        }
+
+        if (keysdown[38]) {
+            // up arrow >> orient camera up
+            if (phi2 < 105) {
+                phi2 = (phi2 + 1.5);
+                spaceshipXaxis =
+                    twgl.v3.normalize(
+                    twgl.m4.transformDirection(
+                    twgl.m4.axisRotation(spaceshipYaxis, toRad(-1.5)),
+                    spaceshipXaxis));
+            }
+
+            if (spaceshipTiltY > -20) {
+                spaceshipTiltY -= (Math.cos(toRad((spaceshipTiltY) * 90 / 20)) + 1) / 2;
+            }
+        }
+        else {
+            if (spaceshipTiltY < -0.001) {
+                spaceshipTiltY += (Math.cos(toRad((spaceshipTiltY) * 90 / 20)) + 1) / 2;
+            }
+        }
+
+        if (keysdown[84]) {
+            // T key >> tilt camera counter clockwise
+            if (!keysdown[16]) {
+                tilt2 += 5;
+            }
+                // Shift + T >> tilt camera clockwise
+            else {
+                tilt2 -= 5;
+            }
+        }
+
+        if (keysdown[70]) {
+            // F key >> -ZOOM
+            if (!keysdown[16]) {
+                if (zoom2 > 5) {
+                    zoom2 -= 1;
+                }
+            }
+                // Shift + F key >> +ZOOM
+            else {
+                if (zoom2 < 30) {
+                    zoom2 += 1;
+                }
+            }
+        }
+
+        /* PLAYER'S CHARACTER CONTROLS */
+        if (keysdown[87]) {
+            // W key >> move character forward
+            if (!keysdown[83]) {
+                target2 = [
+                    target2[0] + spaceshipSpd * spaceshipXaxis[0],
+                    target2[1] + spaceshipSpd * spaceshipXaxis[1],
+                    target2[2] + spaceshipSpd * spaceshipXaxis[2]
+                ];
+                if (keysdown[65]) spaceshipRot = 45 + theta2;
+                else if (keysdown[68]) spaceshipRot = -45 + theta2;
+                else spaceshipRot = theta2;
+            }
+        }
+    }
+
+
+    function toRad(angle) {
+        return angle * Math.PI / 180;
+    }
+
 };
+
+function initShader(gl) {
+    vertexSource = document.getElementById("general-vs").text;
+    fragmentSource = document.getElementById("general-fs").text;
+
+    // Compile vertex shader
+    vertexShader = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vertexShader, vertexSource);
+    gl.compileShader(vertexShader);
+    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+        alert(gl.getShaderInfoLog(vertexShader)); return null;
+    }
+
+    // Compile fragment shader
+    fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fragmentShader, fragmentSource);
+    gl.compileShader(fragmentShader);
+    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+        alert(gl.getShaderInfoLog(fragmentShader)); return null;
+    }
+
+    // Attach the shaders and link
+    var shaderProgram = gl.createProgram();
+    gl.attachShader(shaderProgram, vertexShader);
+    gl.attachShader(shaderProgram, fragmentShader);
+    gl.linkProgram(shaderProgram);
+    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+        alert("Could not initialize shaders");
+    }
+
+    shaderProgram.PositionAttribute = gl.getAttribLocation(shaderProgram, "vPosition");
+    gl.enableVertexAttribArray(shaderProgram.PositionAttribute);
+
+    shaderProgram.textureCoordAttribute = gl.getAttribLocation(shaderProgram, "vTexCoord");
+    gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+
+    shaderProgram.NormalAttribute = gl.getAttribLocation(shaderProgram, "vNormal");
+    gl.enableVertexAttribArray(shaderProgram.NormalAttribute);
+
+    shaderProgram.TangentAttribute = gl.getAttribLocation(shaderProgram, "vTang");
+    gl.enableVertexAttribArray(shaderProgram.TangentAttribute);
+
+    // this gives us access to the matrix uniform
+    shaderProgram.modelMatrix = gl.getUniformLocation(shaderProgram, "modelMatrix");
+    shaderProgram.viewMatrix = gl.getUniformLocation(shaderProgram, "viewMatrix");
+    shaderProgram.projMatrix = gl.getUniformLocation(shaderProgram, "projMatrix");
+    shaderProgram.normalMatrix = gl.getUniformLocation(shaderProgram, "normalMatrix");
+    shaderProgram.dirlight = gl.getUniformLocation(shaderProgram, "dirlight");
+    shaderProgram.ptlightposn = gl.getUniformLocation(shaderProgram, "ptlightposn");
+    shaderProgram.ptlightcolorn = gl.getUniformLocation(shaderProgram, "ptlightcolorn");
+    shaderProgram.ptlightdampern = gl.getUniformLocation(shaderProgram, "ptlightdampern");
+
+    shaderProgram.diffuseMap = gl.getUniformLocation(shaderProgram, "diffuseMap");
+    shaderProgram.normalMap = gl.getUniformLocation(shaderProgram, "normalMap");
+    //Model.shaderProgram.Time = gl.getUniformLocation(Model.shaderProgram, "time");
+
+    shaderProgram.ambient = gl.getUniformLocation(shaderProgram, "ambient");
+    shaderProgram.diffuse = gl.getUniformLocation(shaderProgram, "diffuse");
+    shaderProgram.specular = gl.getUniformLocation(shaderProgram, "specular");
+    shaderProgram.shininess = gl.getUniformLocation(shaderProgram, "shininess");
+    shaderProgram.emission = gl.getUniformLocation(shaderProgram, "emission");
+
+    return shaderProgram;
+}
+

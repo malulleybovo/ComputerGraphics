@@ -5,7 +5,9 @@ var name;
 var size;
 var position;
 
-var tModel;
+var translation;
+var scale;
+var rotation;
 var trianglePosBuffer;
 var colorBuffer;
 var normalBuffer;
@@ -19,15 +21,17 @@ var image;
 var triIndices;
 
 
-function Model(gl, objData, objTexData, mSize, pos, rotAxis, rot, mName) {
+function Model(drawingState, objData, objTexData, mSize, pos, rotAxis, rot, mName) {
     m4 = twgl.m4;
+    Model.shaderProgram = drawingState.shaderProgram;
+    var gl = drawingState.gl;
+
     this.name = mName;
     this.size = mSize;
     this.position = pos;
-    this.tModel = m4.identity();
-    twgl.m4.axisRotate(this.tModel, rotAxis, rot, this.tModel);
-    twgl.m4.setTranslation(this.tModel, this.position, this.tModel);
-    twgl.m4.scale(this.tModel, [this.size, this.size, this.size], this.tModel);
+    this.translation = twgl.m4.translation(this.position);
+    this.scale = twgl.m4.scaling([this.size, this.size, this.size]);
+    this.rotation = twgl.m4.axisRotation(rotAxis, rot);
 
     var loader = new ModelLoader(objData);
     var vertexPos = loader.vertexPos;
@@ -51,73 +55,8 @@ function Model(gl, objData, objTexData, mSize, pos, rotAxis, rot, mName) {
 }
 
 Model.shaderProgram = undefined;
-Model.buffers = undefined;
 
 Model.prototype.init = function (drawingState) {
-    var gl = drawingState.gl;
-    // create the shaders once - for all models
-    if (!Model.shaderProgram) {
-        // Read shader source
-        vertexSource = document.getElementById("general-vs").text;
-        fragmentSource = document.getElementById("general-fs").text;
-
-        // Compile vertex shader
-        vertexShader = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vertexShader, vertexSource);
-        gl.compileShader(vertexShader);
-        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-            alert(gl.getShaderInfoLog(vertexShader)); return null;
-        }
-
-        // Compile fragment shader
-        fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fragmentShader, fragmentSource);
-        gl.compileShader(fragmentShader);
-        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-            alert(gl.getShaderInfoLog(fragmentShader)); return null;
-        }
-
-        // Attach the shaders and link
-        Model.shaderProgram = gl.createProgram();
-        gl.attachShader(Model.shaderProgram, vertexShader);
-        gl.attachShader(Model.shaderProgram, fragmentShader);
-        gl.linkProgram(Model.shaderProgram);
-        if (!gl.getProgramParameter(Model.shaderProgram, gl.LINK_STATUS)) {
-            alert("Could not initialize shaders");
-        }
-
-        Model.shaderProgram.PositionAttribute = gl.getAttribLocation(Model.shaderProgram, "vPosition");
-        gl.enableVertexAttribArray(Model.shaderProgram.PositionAttribute);
-
-        Model.shaderProgram.textureCoordAttribute = gl.getAttribLocation(Model.shaderProgram, "vTexCoord");
-        gl.enableVertexAttribArray(Model.shaderProgram.textureCoordAttribute);
-
-        Model.shaderProgram.NormalAttribute = gl.getAttribLocation(Model.shaderProgram, "vNormal");
-        gl.enableVertexAttribArray(Model.shaderProgram.NormalAttribute);
-
-        Model.shaderProgram.TangentAttribute = gl.getAttribLocation(Model.shaderProgram, "vTang");
-        gl.enableVertexAttribArray(Model.shaderProgram.TangentAttribute);
-
-        // this gives us access to the matrix uniform
-        Model.shaderProgram.modelMatrix = gl.getUniformLocation(Model.shaderProgram, "modelMatrix");
-        Model.shaderProgram.viewMatrix = gl.getUniformLocation(Model.shaderProgram, "viewMatrix");
-        Model.shaderProgram.projMatrix = gl.getUniformLocation(Model.shaderProgram, "projMatrix");
-        Model.shaderProgram.normalMatrix = gl.getUniformLocation(Model.shaderProgram, "normalMatrix");
-        Model.shaderProgram.dirlight = gl.getUniformLocation(Model.shaderProgram, "dirlight");
-        Model.shaderProgram.ptlightposn = gl.getUniformLocation(Model.shaderProgram, "ptlightposn");
-        Model.shaderProgram.ptlightcolorn = gl.getUniformLocation(Model.shaderProgram, "ptlightcolorn");
-        Model.shaderProgram.ptlightdampern = gl.getUniformLocation(Model.shaderProgram, "ptlightdampern");
-
-        Model.shaderProgram.diffuseMap = gl.getUniformLocation(Model.shaderProgram, "diffuseMap");
-        Model.shaderProgram.normalMap = gl.getUniformLocation(Model.shaderProgram, "normalMap");
-        //Model.shaderProgram.Time = gl.getUniformLocation(Model.shaderProgram, "time");
-
-        Model.shaderProgram.ambient = gl.getUniformLocation(Model.shaderProgram, "ambient");
-        Model.shaderProgram.diffuse = gl.getUniformLocation(Model.shaderProgram, "diffuse");
-        Model.shaderProgram.specular = gl.getUniformLocation(Model.shaderProgram, "specular");
-        Model.shaderProgram.shininess = gl.getUniformLocation(Model.shaderProgram, "shininess");
-        Model.shaderProgram.emission = gl.getUniformLocation(Model.shaderProgram, "emission");
-    }
 };
 
 Model.prototype.draw = function (drawingState) {
@@ -139,10 +78,10 @@ Model.prototype.draw = function (drawingState) {
     gl.uniform1f(Model.shaderProgram.shininess, this.textureData.shininess);
     gl.uniform4fv(Model.shaderProgram.emission, this.textureData.emission);
 
-    gl.uniformMatrix4fv(Model.shaderProgram.modelMatrix, false, this.tModel);
+    gl.uniformMatrix4fv(Model.shaderProgram.modelMatrix, false, this.getModelMatrix());
     gl.uniformMatrix4fv(Model.shaderProgram.viewMatrix, false, drawingState.view);
     gl.uniformMatrix4fv(Model.shaderProgram.projMatrix, false, drawingState.proj);
-    gl.uniformMatrix4fv(Model.shaderProgram.normalMatrix, false, twgl.m4.transpose(twgl.m4.inverse(twgl.m4.multiply(this.tModel, drawingState.view))));
+    gl.uniformMatrix4fv(Model.shaderProgram.normalMatrix, false, twgl.m4.transpose(twgl.m4.inverse(twgl.m4.multiply(this.getModelMatrix(), drawingState.view))));
 
     this.bindAllBuffers(gl, Model.shaderProgram.PositionAttribute, Model.shaderProgram.textureCoordAttribute, Model.shaderProgram.NormalAttribute, Model.shaderProgram.TangentAttribute);
     this.drawModel(gl);
@@ -152,16 +91,27 @@ Model.prototype.center = function (drawingState) {
     return this.position;
 }
 
-Model.prototype.setModelMatrixR = function (modelMatrix) {
-    this.tModel = m4.multiply(modelMatrix, this.tModel);
+Model.prototype.setTranslation = function (transMatrix) {
+    this.translation = transMatrix;
+}
+Model.prototype.addTranslation = function (transMatrix) {
+    this.translation = twgl.m4.multiply(transMatrix, this.translation);
 }
 
-Model.prototype.setModelMatrixL = function (modelMatrix) {
-    this.tModel = m4.multiply(this.tModel, modelMatrix);
+Model.prototype.setScale = function (scalingMatrix) {
+    this.scale = scalingMatrix;
+}
+
+Model.prototype.setRotation = function (rotMatrix) {
+    this.rotation = rotMatrix;
+}
+
+Model.prototype.addRotation = function (rotMatrix) {
+    this.rotation = twgl.m4.multiply(rotMatrix, this.rotation);
 }
 
 Model.prototype.getModelMatrix = function (modelMatrix) {
-    return this.tModel;
+    return twgl.m4.multiply(twgl.m4.multiply(this.scale, this.rotation), this.translation);
 }
 
 Model.prototype.setUniforms = function () {

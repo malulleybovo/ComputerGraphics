@@ -26,12 +26,16 @@
 <script src="Model.js"></script>
 <script src="legoHeadDataFile.js"></script>
 <script src="crystalDataFile.js"></script>
+<script src="cubeMapRenderer.js"></script>
+<script src="cubeMapTextures.js"></script>
 <script src="Entities/Ground/groundTextures.js"></script>
 <script src="Entities/Ground/groundDataFile.js"></script>
 <script src="Entities/xWing/xWingTextures.js"></script>
 <script src="Entities/xWing/xWingDataFile.js"></script>
 <script src="Entities/arc170/arc170DataFile.js"></script>
 <script src="Entities/arc170/arc170Textures.js"></script>
+<script src="Entities/snowTerrain/snowTerrainDataFile.js"></script>
+<script src="Entities/snowTerrain/snowTerrainTextures.js"></script>
 
 <!-- I am adding the helicopter -->
 <script src="Helicopter/helicopter.js"></script>
@@ -44,6 +48,34 @@
   -- that's the only way I know to load them without either
   -- sticking them in JavaScript strings, or using a web server
   -->
+
+<script type="x-vertex" id="vshader">
+    attribute vec3 coords;
+    uniform mat4 projection;
+    uniform mat4 modelview;
+    varying vec3 vCoords;
+    void main() {
+        vec4 eyeCoords = modelview * vec4(coords,1.0);
+        gl_Position = projection * eyeCoords;
+        vCoords = coords;//gl_Position.xyz;
+    }
+</script>
+
+<script type="x-fragment" id="fshader">
+    precision mediump float;
+    varying vec3 vCoords;
+    uniform samplerCube skybox;
+    uniform float tod;
+    void main() {
+    float f1 =((tod / 12.0));
+    if(f1 > 1.0) {
+        f1 = abs(f1 - 2.0);
+    }
+    gl_FragColor = vec4(f1, f1, f1, 1.0) * textureCube(skybox, vCoords);
+    //gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    }
+</script>
+
 
 <script id="general-vs" type="notjs">
 
@@ -185,82 +217,10 @@
 
         finalcolor = finalcolor + lambert + phong;
     }
-
-    gl_FragColor = normalize(finalcolor);
+    float focus = 1.0 / pow(abs(fPosition.z / 20.0) + 0.3, 0.3);
+    gl_FragColor = focus * normalize(finalcolor);
     }
 
-</script>
-
-<script id="cube-vs" type="notjs">
-// specialized shader for the simple cube
-// we assume that the model matrix works as the normal
-//      matrix - this only is try if the model matrix
-//      it a rotate/translate
-//      (uniform scale is OK since we re-normalize)
-// color is solid
-// simple lighting
-    precision highp float;
-
-    attribute vec3 vpos;
-    attribute vec3 vnormal;
-    varying vec3 outColor;
-
-    uniform mat4 view;
-    uniform mat4 proj;
-    uniform mat4 model;
-    uniform vec3 dirlight;
-    uniform vec3 cubecolor;
-
-
-    void main(void) {
-        gl_Position = proj * view * model * vec4(vpos, 1.0);
-        vec4 normal = normalize(model * vec4(vnormal,0.0));
-        float diffuse = .5 + .5*abs(dot(normal, vec4(dirlight,0.0)));
-        outColor = cubecolor * diffuse;
-    }
-</script>
-<script id="cube-fs" type="notjs">
-// simple shader that does vertex coloring
-//  (e.g. the vertex shader figures the lighting
-// note this is used for more than just the cube
-    precision highp float;
-    varying vec3 outColor;
-    void main(void) {
-        gl_FragColor = vec4(outColor, 1.0);
-    }
-</script>
-
-<!-- Special Ground Plane Shader - makes a boring
-  -- checkerboard
-  -->
-<script id="ground-vs" type="not-js">
-    precision highp float;
-
-    attribute vec3 vpos;
-    varying vec3 outPos;
-
-    uniform mat4 view;
-    uniform mat4 proj;
-
-    void main(void) {
-        gl_Position = proj * view * vec4(vpos, 1.0);
-        outPos = vpos;
-    }
-</script>
-<script id="ground-fs" type="notjs">
-    // note this is used for more than just the cube
-    precision highp float;
-    varying vec3 outPos;
-    void main(void) {
-        float xs = step(1.0,mod(outPos.x,2.0));
-        float zs = step(1.0,mod(outPos.z,2.0));
-        float ss = (xs>.5) ? zs : 1.0-zs;
-        gl_FragColor = mix(vec4(0.5,0.5,0.5,1),
-                           vec4(0.3,0.5,0.4,1),
-                           ss
-                           );
-
-    }
 </script>
 
 </html>
