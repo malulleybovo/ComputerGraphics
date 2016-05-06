@@ -1,9 +1,7 @@
 
-var textures;
-
 function ModelTexLoader(objTexData) {
 
-    this.textures = textures || {};
+    this.textures = this.textures || {};
     this.parse(objTexData);
 
 }

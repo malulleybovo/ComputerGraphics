@@ -1,25 +1,16 @@
 
-var objDataContent;
-var vertexPos;
-var vertexNormals;
-var vertexColors;
-var vertexIndices;
-var vertexTangents;
-var material;
-
 function ModelLoader(objData) {
+    
     this.vertexPos = [];
     this.vertexNormals = [];
     this.vertexColors = [];
     this.vertexIndices = [];
     this.vertexTangents = [];
     this.material = null;
+
     this.loadObjData(objData);
-    this.vertexPos = new Float32Array(this.vertexPos);
-    this.vertexNormals = new Float32Array(this.vertexNormals);
-    this.vertexColors = new Float32Array(this.vertexColors);
-    this.vertexIndices = new Uint16Array(this.vertexIndices);
     this.computeTangents();
+
 }
 
 ModelLoader.prototype.loadObjData = function (content) {
@@ -75,6 +66,11 @@ ModelLoader.prototype.loadObjData = function (content) {
             this.material = subLine[1];
         }
     }
+
+    this.vertexPos = new Float32Array(this.vertexPos);
+    this.vertexNormals = new Float32Array(this.vertexNormals);
+    this.vertexColors = new Float32Array(this.vertexColors);
+    this.vertexIndices = new Uint16Array(this.vertexIndices);
 }
 
 ModelLoader.prototype.computeTangents = function () {

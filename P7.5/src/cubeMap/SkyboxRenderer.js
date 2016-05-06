@@ -10,8 +10,6 @@ var uModelview;
 var projection = twgl.m4.create();   // projection matrix
 var modelview;    // modelview matrix
 
-var rotator;   // A SimpleRotator object to enable rotation by mouse dragging.
-
 var texID;
 var cube;
 
@@ -20,7 +18,7 @@ var tod;
 /**
  * Draws the socre ball one face at a time, copying the vertex coords into a VBO for each face.
  */
-function drawCubeMap(drawingState, timeOfDay) {
+function drawSkybox(drawingState, timeOfDay) {
 
     gl.useProgram(prog);
     
@@ -28,7 +26,6 @@ function drawCubeMap(drawingState, timeOfDay) {
     antiTranslation = twgl.m4.translation(antiTranslation);
     modelview = twgl.m4.multiply(drawingState.view, antiTranslation);
 
-    twgl.m4.perspective(drawingState.proj, Math.PI / 3, 1, 50, 200);
     gl.uniformMatrix4fv(uProjection, false, drawingState.proj);
     gl.uniformMatrix4fv(uModelview, false, modelview);
     gl.uniform1f(tod, timeOfDay);
@@ -131,7 +128,7 @@ function getTextContent(elementID) {
 }
 
 
-function initCubeMap(myCanvas, view) {
+function initSkybox(myCanvas, view) {
     try {
         var canvas = myCanvas;
         gl = twgl.getWebGLContext(canvas);
@@ -148,14 +145,14 @@ function initCubeMap(myCanvas, view) {
         uProjection = gl.getUniformLocation(prog, "projection");
         tod = gl.getUniformLocation(prog, "tod");
         gl.enable(gl.DEPTH_TEST);
-        rotator = view;
-        cube = createModel(cube(1000));
+        cube = createModel(cube(5000));
     }
     catch (e) {
         return;
     }
     loadTextureCube();
 }
+
 function cube(side) {
     var s = (side || 1) / 2;
     var coords = [];
